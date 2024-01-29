@@ -1,0 +1,7 @@
+torch
+torchvision
+tqdm
+pybind11
+fastwer
+ctcdecode
+termcolor
