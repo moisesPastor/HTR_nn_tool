@@ -143,7 +143,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         else:
             epochs_without_improving = epochs_without_improving + 1;
 
-        if epochs_without_improving >= early_stop:
+        if epochs_without_improving >0 and epochs_without_improving >= early_stop:
             sys.exit(colored("Early stoped after %i epoch without improving"%(early_stop),"green"))
     return model
 
