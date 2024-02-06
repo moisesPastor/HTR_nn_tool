@@ -124,22 +124,27 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
                 continue
        
         model.eval()    
-        torch.cuda.empty_cache()
+        
         # Deactivate the autograd engine
         # It's not required for inference phase
         with torch.no_grad():
              val_loss = 0
         for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader, desc='  Valid'):
-            x = x.to(device)
-            #save_image(x, f"out.png", nrow=1); break
+            torch.cuda.empty_cache()
+            try:
+                x = x.to(device)
+                #save_image(x, f"out.png", nrow=1); break
 
-            # Run forward pass (equivalent to: outputs = model(x))
-            outputs = model.forward(x)
-            # outputs ---> W,N,K    K=number of different chars + 1
+                # Run forward pass (equivalent to: outputs = model(x))
+                outputs = model.forward(x)
+                # outputs ---> W,N,K    K=number of different chars + 1
             
-            loss =  criterion(outputs, y, input_lengths=input_lengths,       
+                loss =  criterion(outputs, y, input_lengths=input_lengths,       
                             target_lengths=target_lengths)
-            val_loss += loss.item()
+                val_loss += loss.item()
+            except Exception as er:
+                print("ERROR: CUDA out of memory")
+                continue
             
         print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss/len(train_loader),val_loss/len(val_loader)))
 
