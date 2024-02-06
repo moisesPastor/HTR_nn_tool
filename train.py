@@ -14,7 +14,7 @@ import procImg
 from buildMod import HTRModel
 from dataset import HTRDataset, ctc_collate
 
-def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, early_stop=10,lh=64):
+def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, early_stop=10,lh=64,verbosity=False):
     # To control the reproducibility of the experiments
     #torch.manual_seed(17)
     charVoc = htr_dataset_train.get_charVoc()
@@ -76,44 +76,55 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         model.train()
         # Mini-Batch train loop
         print("Epoch %i"%(epoch))
-        for ((x, input_lengths),(y,target_lengths), _) in tqdm(train_loader, desc='  Train'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, desc='  Train'):
             # The train_loader output was set up in the "ctc_collate" 
             # function defined in the dataset module
             x, y = x.to(device), y.to(device)
 
             #save_image(x, f"out.png", nrow=1); sys.exit(1)
-
-            # Forward pass
-            outputs = model(x)
-            # outputs ---> Tensor:TxNxC 
-            # T=time-steps, N=batch-size, C=# of classes
             
-            # https://pytorch.org/docs/stable/generated/torch.nn.functional.ctc_loss.html
-            # ctc_loss(log_probs, targets, input_lengths, target_lengths, 
-            #          reduction='mean')
-            # mean: the output losses will be divided by the target lengths 
-            #       and then the mean over the batch is taken
-            loss = criterion(outputs, y, input_lengths=input_lengths,       
-                            target_lengths=target_lengths)
+            try:
+                # Forward pass
+                outputs = model(x)
+                # outputs ---> Tensor:TxNxC 
+                # T=time-steps, N=batch-size, C=# of classes
+
+            
+                # https://pytorch.org/docs/stable/generated/torch.nn.functional.ctc_loss.html
+                # ctc_loss(log_probs, targets, input_lengths, target_lengths, 
+                #          reduction='mean')
+                # mean: the output losses will be divided by the target lengths 
+                #       and then the mean over the batch is taken
+                loss = criterion(outputs, y, input_lengths=input_lengths,       
+                                 target_lengths=target_lengths)
            
-            # Set the gradients of all optimized torch.Tensors to zero
-            # before starting to do backpropragation (i.e., updating 
-            # the Weights and biases): w.grad = 0
-            optimizer.zero_grad()
-            
-            # Backward pass
-            # Compute dloss/dw for every parameter w which has
-            # requires_grad=True: w.grad += dloss/dw
-            loss.backward()
+                # Set the gradients of all optimized torch.Tensors to zero
+                # before starting to do backpropragation (i.e., updating 
+                # the Weights and biases): w.grad = 0
+                optimizer.zero_grad()
+                
+                # Backward pass
+                # Compute dloss/dw for every parameter w which has
+                # requires_grad=True: w.grad += dloss/dw
+                loss.backward()
+                
+                # Optimizer method "step()" updates the parameters:
+                # w += -lr * w.grad
+                optimizer.step()
 
-            # Optimizer method "step()" updates the parameters:
-            # w += -lr * w.grad
-            optimizer.step()
-
-            total_train_loss += loss.item()/len(train_loader)
+                total_train_loss += loss.item()
+            except Exception as e:
+                print("ERROR: CUDA out of memory")
+                torch.cuda.empty_cache()
+                if verbosity:
+                    files=""
+                    for i,x in enumerate(bIdxs):
+                        files=files+" "+htr_dataset_train.items[bIdxs[i]]
+                    print(files)
+                continue
        
         model.eval()    
-    
+        torch.cuda.empty_cache()
         # Deactivate the autograd engine
         # It's not required for inference phase
         with torch.no_grad():
@@ -128,9 +139,9 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
             
             loss =  criterion(outputs, y, input_lengths=input_lengths,       
                             target_lengths=target_lengths)
-            val_loss += loss.item()/len(val_loader)
+            val_loss += loss.item()
             
-        print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss,val_loss))
+        print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss/len(train_loader),val_loss/len(val_loader)))
 
         if (val_loss  < best_val_loss):
             epochs_without_improving=0
@@ -143,7 +154,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         else:
             epochs_without_improving = epochs_without_improving + 1;
 
-        if epochs_without_improving >0 and epochs_without_improving >= early_stop:
+        if epochs_without_improving >= early_stop:
             sys.exit(colored("Early stoped after %i epoch without improving"%(early_stop),"green"))
     return model
 
@@ -157,7 +168,8 @@ if __name__ == "__main__":
     parser.add_argument('--early-stop', type=int, help='number of epochs without improving', default=10)
     parser.add_argument('--batch-size', type=int, help='image batch-size', default=24)
     parser.add_argument('--space-symbol', type=str, help='image batch-size', default='~')
-    parser.add_argument('--gpu', type=int, default=[0,1], nargs='+', help='used gpu')
+    parser.add_argument('--gpu', type=int, default=[0,1], nargs='+', help='used gpu')     
+    parser.add_argument("--verbosity", action="store_true",  help="increase output verbosity",default=False)
     parser.add_argument('dataset_train', type=str, help='train dataset location')
     parser.add_argument('dataset_val', type=str, help='validation dataset location')
     parser.add_argument('model_name', type=str, help='Save model with this file name')
@@ -191,7 +203,7 @@ if __name__ == "__main__":
         except FileNotFoundError:
             print(colored("\tWARNING: file  "+ args.models_file + " does not exist","red"))
             exit (-1)
-
+        
         numClasses = len(charVoc)
         model = HTRModel(num_classes=numClasses,line_height=args.fixed_height)
         model.to(device)
@@ -203,7 +215,7 @@ if __name__ == "__main__":
                                    args.space_symbol,
                                    transform=img_transforms,
                                    charVoc=charVoc)
-    
+
     htr_dataset_val = HTRDataset(args.dataset_val,
                                  args.space_symbol,
                                  transform=img_transforms,
@@ -211,7 +223,7 @@ if __name__ == "__main__":
     
     train(model, htr_dataset_train, htr_dataset_val, device, epochs=args.epochs,          
           bs=args.batch_size, early_stop=args.early_stop,
-          lh=args.fixed_height)
+          lh=args.fixed_height,verbosity=args.verbosity)
 
     torch.save({'model': model, 
                 'line_height': args.fixed_height, 
