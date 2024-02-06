@@ -45,7 +45,7 @@ def test(model, htr_dataset, test_loader, device, bs=20, lmFile=None, beam=200, 
                                 beam_width=beam,
                                 #cutoff_top_n=200,
                                 #cutoff_prob=1.0,
-                                num_processes=8,
+                                num_processes=int(cpu_count() * 0.8),
                                 blank_id=CTC_BLANK,
                                 log_probs_input=True)
         
