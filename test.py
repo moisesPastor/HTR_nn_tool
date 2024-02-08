@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-
-# Standard packages
-import sys, os, argparse
-import torch
 import fastwer
 import numpy as np
 
@@ -53,7 +48,7 @@ def test(model, htr_dataset, test_loader, device, bs=20, lmFile=None, beam=200, 
         # To store the reference and hypothesis strings
         ref, hyp = list(), list()
         
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader, desc='Test'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader,colour='cyan', desc='Test'):
             x = x.to(device)
             #save_image(x, f"out.png", nrow=1); break
 
