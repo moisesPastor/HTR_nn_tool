@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+
+# Standard packages
+import sys, os, argparse
+import torch
 import fastwer
 import numpy as np
 
