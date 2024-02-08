@@ -73,10 +73,15 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
     epochs_without_improving=0
     for epoch in range(epochs):
         total_train_loss = 0
+        ignored_batches=list()
+        batch_num=0
         model.train()
         # Mini-Batch train loop
+        terminal_cols = os.get_terminal_size()[0]
+  
         print("Epoch %i"%(epoch))
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, desc='  Train'):
+  #      for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format='{l_bar}{bar:20}{r_bar}', colour='green', desc='  Train'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, ncols=terminal_cols, colour='green', desc='  Train'):
             # The train_loader output was set up in the "ctc_collate" 
             # function defined in the dataset module
             x, y = x.to(device), y.to(device)
@@ -114,22 +119,26 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
 
                 total_train_loss += loss.item()
             except Exception as e:
-                print("ERROR: CUDA out of memory")
+               
                 torch.cuda.empty_cache()
+                ignored_batches.append(batch_num)
                 if verbosity:
+                    print("ERROR: CUDA out of memory")
                     files=""
                     for i,x in enumerate(bIdxs):
                         files=files+" "+htr_dataset_train.items[bIdxs[i]]
                     print(files)
                 continue
-       
+            batch_num=batch_num + 1
+        if verbosity:
+            print(colored("  Ignored batches "+str(ignored_batches)+" of "+str(batch_num),"green"))
         model.eval()    
         
         # Deactivate the autograd engine
         # It's not required for inference phase
         with torch.no_grad():
              val_loss = 0
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader, desc='  Valid'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader,ncols=terminal_cols, colour='cyan', desc='  Valid'):
             torch.cuda.empty_cache()
             try:
                 x = x.to(device)
@@ -143,7 +152,8 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
                             target_lengths=target_lengths)
                 val_loss += loss.item()
             except Exception as er:
-                print("ERROR: CUDA out of memory")
+                if verbosity:
+                    print("ERROR: CUDA out of memory\n")
                 continue
             
         print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss/len(train_loader),val_loss/len(val_loader)))
