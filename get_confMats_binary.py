@@ -28,7 +28,7 @@ def test(model, htr_dataset, test_loader, device, numClasses, batch_size=20, con
         f_out = open(confMatrix, 'wb')
         
         # Main batch loop
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader, colour='cyan', colour='cyan', desc='Test'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader, colour='cyan', desc='Test'):
             #To GPU (or CPU)
             x = x.to(device)
             
