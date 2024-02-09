@@ -137,7 +137,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         # It's not required for inference phase
         with torch.no_grad():
              val_loss = 0
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader,ncols=terminal_cols, colour='cyan', desc='  Valid'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader,ncols=terminal_cols, colour='magenta', desc='  Valid'):
             torch.cuda.empty_cache()
             try:
                 x = x.to(device)
