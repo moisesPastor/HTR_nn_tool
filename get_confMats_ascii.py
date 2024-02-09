@@ -37,7 +37,7 @@ def test(model, htr_dataset, test_loader, device, numClasses, batch_size=20, con
         f_out = open(confMatrix, 'w')
         
         # Main Mini-batch loop
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader, desc='Test'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(test_loader, colour='cyan', desc='Test'):
             #To GPU (or CPU)
             x = x.to(device)
             #save_image(x, f"out.png", nrow=1); break
