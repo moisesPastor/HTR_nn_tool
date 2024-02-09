@@ -80,7 +80,6 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         terminal_cols = os.get_terminal_size()[0]
   
         print("Epoch %i"%(epoch))
-  #      for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format='{l_bar}{bar:20}{r_bar}', colour='green', desc='  Train'):
         for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, ncols=terminal_cols, colour='green', desc='  Train'):
             # The train_loader output was set up in the "ctc_collate" 
             # function defined in the dataset module
