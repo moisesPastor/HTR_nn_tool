@@ -7,6 +7,7 @@ import torch
 from multiprocessing import cpu_count
 
 from tqdm import tqdm
+from termcolor import colored
 
 # Local packages
 import procImg
