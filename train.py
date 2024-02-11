@@ -78,9 +78,9 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         model.train()
         # Mini-Batch train loop
         terminal_cols = os.get_terminal_size()[0]
-  
+        format='{l_bar}{bar:'+str(terminal_cols-48)+'}{r_bar}'
         print("Epoch %i"%(epoch))
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, ncols=terminal_cols, colour='green', desc='  Train'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format=format, colour='green', desc='  Train'):
             # The train_loader output was set up in the "ctc_collate" 
             # function defined in the dataset module
             x, y = x.to(device), y.to(device)
@@ -137,7 +137,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         # It's not required for inference phase
         with torch.no_grad():
              val_loss = 0
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader,ncols=terminal_cols, colour='magenta', desc='  Valid'):
+        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader, bar_format=format, colour='magenta', desc='  Valid'):
             torch.cuda.empty_cache()
             try:
                 x = x.to(device)
