@@ -76,9 +76,14 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         ignored_batches=list()
         batch_num=0
         model.train()
-        # Mini-Batch train loop
-        terminal_cols = os.get_terminal_size()[0]
+       
+        try:
+            terminal_cols = os.get_terminal_size()[0]
+        except IOError:
+            terminal_cols = 80  
         format='{l_bar}{bar:'+str(terminal_cols-48)+'}{r_bar}'
+
+        # Mini-Batch train loop    
         print("Epoch %i"%(epoch))
         for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format=format, colour='green', desc='  Train'):
             # The train_loader output was set up in the "ctc_collate" 
