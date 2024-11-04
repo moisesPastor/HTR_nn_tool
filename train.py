@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 # Standard packages
+import time
+
 import sys, os, argparse
 from tqdm import tqdm
 import torch
@@ -14,7 +16,7 @@ import procImg
 from buildMod import HTRModel
 from dataset import HTRDataset, ctc_collate
 
-def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, early_stop=10,lh=64,verbosity=False):
+def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, batch_size=24, early_stop=10,verbosity=False):
     # To control the reproducibility of the experiments
     #torch.manual_seed(17)
     charVoc = htr_dataset_train.get_charVoc()
@@ -22,14 +24,14 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
     
     nwrks = int(cpu_count() * 0.70) # use ~2/3 of avilable cores
     train_loader = torch.utils.data.DataLoader(htr_dataset_train,
-                                            batch_size = bs,
+                                            batch_size = batch_size,
                                             num_workers=nwrks,
                                             pin_memory=True,
                                             shuffle = True, 
                                             collate_fn = ctc_collate)
     
     val_loader = torch.utils.data.DataLoader(htr_dataset_val,
-                                            batch_size = bs,
+                                            batch_size = batch_size,
                                             num_workers=nwrks,
                                             pin_memory=True,
                                             shuffle = False, 
@@ -69,6 +71,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
     print(f'\nModel with {total_params} parameters to be trained.\n', file=sys.stdout)
 
     # Epoch loop
+    last_best_val_epoch=-1
     best_val_loss=sys.float_info.max;
     epochs_without_improving=0
     for epoch in range(epochs):
@@ -76,16 +79,19 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
         ignored_batches=list()
         batch_num=0
         model.train()
-       
+
         try:
             terminal_cols = os.get_terminal_size()[0]
         except IOError:
-            terminal_cols = 80  
+            terminal_cols = 80
+            
         format='{l_bar}{bar:'+str(terminal_cols-48)+'}{r_bar}'
-
-        # Mini-Batch train loop    
+            
+        # Mini-Batch train loop
         print("Epoch %i"%(epoch))
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format=format, colour='green', desc='  Train'):
+        for ((x,  input_lengths),(y,target_lengths), bIdxs) in tqdm(train_loader, bar_format=format,dynamic_ncols=True, colour='green', desc='  Train'):
+            
+
             # The train_loader output was set up in the "ctc_collate" 
             # function defined in the dataset module
             x, y = x.to(device), y.to(device)
@@ -123,46 +129,57 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
 
                 total_train_loss += loss.item()
             except Exception as e:
-               
                 torch.cuda.empty_cache()
                 ignored_batches.append(batch_num)
                 if verbosity:
-                    print("ERROR: CUDA out of memory")
                     files=""
                     for i,x in enumerate(bIdxs):
                         files=files+" "+htr_dataset_train.items[bIdxs[i]]
-                    print(files)
+
+                    print("     Ignored batch "+ str(batch_num)+" [" + files +" ]")
                 continue
+
             batch_num=batch_num + 1
-        if verbosity:
-            print(colored("  Ignored batches "+str(ignored_batches)+" of "+str(batch_num),"green"))
+#        if verbosity:
+        print(colored("  Ignored batches "+str(ignored_batches)+" of "+str(batch_num),"green"))
+
         model.eval()    
         
         # Deactivate the autograd engine
         # It's not required for inference phase
         with torch.no_grad():
              val_loss = 0
-        for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader, bar_format=format, colour='magenta', desc='  Valid'):
-            torch.cuda.empty_cache()
-            try:
-                x = x.to(device)
-                #save_image(x, f"out.png", nrow=1); break
+             for ((x, input_lengths),(y,target_lengths), bIdxs) in tqdm(val_loader, bar_format=format, colour='magenta', desc='  Valid'):
+                 torch.cuda.empty_cache()
+                 try:
+                     x = x.to(device)
+                     #save_image(x, f"out.png", nrow=1); break
+                     
+                     # Run forward pass (equivalent to: outputs = model(x))
+                     outputs = model.forward(x)
+                     # outputs ---> W,N,K    K=number of different chars + 1
 
-                # Run forward pass (equivalent to: outputs = model(x))
-                outputs = model.forward(x)
-                # outputs ---> W,N,K    K=number of different chars + 1
-            
-                loss =  criterion(outputs, y, input_lengths=input_lengths,       
+                     loss =  criterion(outputs, y, input_lengths=input_lengths,       
                             target_lengths=target_lengths)
-                val_loss += loss.item()
-            except Exception as er:
-                if verbosity:
-                    print("ERROR: CUDA out of memory\n")
-                continue
+                     val_loss += loss.item()
+                 except Exception as er:
+                     if verbosity:                 
+                         print("ERROR: CUDA out of memory\n")
+                         print(er)
+
+                     continue
             
-        print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss/len(train_loader),val_loss/len(val_loader)))
+        num_img_processed = len(train_loader) - (len(ignored_batches) * batch_size) #len(bIdxs))
+        if num_img_processed == 0:
+            print(colored("\ttrain av. loss = INF val av. loss = INF","red"))
+            continue
+      
 
         if (val_loss  < best_val_loss):
+            print ("\033[93m\ttrain av. loss = %.5f val av. loss = %.5f\x1b[0m"%(total_train_loss/num_img_processed,val_loss/len(val_loader)))
+            logs.write("epoch %i train av. loss = %.5f val av. loss = %.5f\n"%(epoch, total_train_loss/num_img_processed,val_loss/len(val_loader)))
+            logs.flush()
+            
             epochs_without_improving=0
             best_val_loss = val_loss
             torch.save({'model': model, 
@@ -170,9 +187,14 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, bs=24, e
                'codec': charVoc,
                'spaceSymbol': args.space_symbol},
                       args.model_name.rsplit('.',1)[0]+"_"+str(epoch)+".pth")
+            if os.path.exists(args.model_name.rsplit('.',1)[0]+"_"+str(last_best_val_epoch)+".pth"):
+                os. remove(args.model_name.rsplit('.',1)[0]+"_"+str(last_best_val_epoch)+".pth")
+            last_best_val_epoch=epoch
+
         else:
             epochs_without_improving = epochs_without_improving + 1;
-
+            print ("\ttrain av. loss = %.5f val av. loss = %.5f"%(total_train_loss/len(train_loader),val_loss/len(val_loader)))
+            
         if epochs_without_improving >= early_stop:
             sys.exit(colored("Early stoped after %i epoch without improving"%(early_stop),"green"))
     return model
@@ -239,14 +261,24 @@ if __name__ == "__main__":
                                  args.space_symbol,
                                  transform=img_transforms,
                                  charVoc=charVoc)
-    
+
+    start_time=time.time();
+    logs = open(args.model_name.rsplit('.',1)[0]+".log","w")
     train(model, htr_dataset_train, htr_dataset_val, device, epochs=args.epochs,          
-          bs=args.batch_size, early_stop=args.early_stop,
-          lh=args.fixed_height,verbosity=args.verbosity)
+          batch_size=args.batch_size, early_stop=args.early_stop,
+          verbosity=args.verbosity)
 
-    torch.save({'model': model, 
-                'line_height': args.fixed_height, 
-                'codec': charVoc,
-                'spaceSymbol': args.space_symbol}, args.model_name)
+#    torch.save({'model': model, 
+#                'line_height': args.fixed_height, 
+#                'codec': charVoc,
+#                'spaceSymbol': args.space_symbol}, args.model_name)
 
+
+    logs.close()
+    total_time=time.time() - start_time;
+    m, s = divmod(total_time, 60)
+    h, m = divmod(m, 60)
+
+    print("Total training time %02i:%02i:%02i"%(h,m,s))
+    
     sys.exit(os.EX_OK)
