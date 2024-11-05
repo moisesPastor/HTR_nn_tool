@@ -202,7 +202,7 @@ def train(model, htr_dataset_train ,htr_dataset_val, device, epochs=20, batch_si
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a model training process of using the given dataset.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--models-file', type=str, help='file with models name',required=True)
+    parser.add_argument('--models-file', type=str, help='file with models name',required=False)
     parser.add_argument('--data-augm', action='store_true', help='enable data augmentation', default=False)
     parser.add_argument('--fixed-height', type=int, help='fixed image height', default=64)
     parser.add_argument('--epochs', type=int, help='number of epochs', default=20)
