@@ -81,13 +81,18 @@ def test(model, htr_dataset, test_loader, device, bs=20, lmFile=None, beam=200, 
                 ref.append(refText)
                 
                 hypText = htr_dataset.get_decoded_label(dec[0:size]) if size > 0 else ''
-                hyp.append(hypText)
-                
-                
+                hyp.append(hypText)                                
 
                 if (verbosity):
+                    cer_score=fastwer.score([hypText], [refText], char_level=True)
                     line_id = htr_dataset.items[bIdxs[i]]
-                    print(f'Line-ID: {line_id}\nREF: {refText}\nHYP: {hypText}\n', file=sys.stdout)
+                    if (cer_score == 0):
+                        print("\033[93m Line-ID: %s\n\033[92mREF: \"%s\"\nHYP: \"%s\"\033[39m\n"%(line_id,refText,hypText))
+                    else:
+                        wer_score = fastwer.score(hyp, ref, char_level=False)
+                        print("\033[93mLine-ID: %s \033[31mcer=%.3f wer=%.3f\033[39m"%(line_id,cer_score,wer_score))
+                        print("REF: \"%s\"\nHYP: \"%s\"\n"%(refText,hypText))
+                        
                 ptr += target_lengths[i]
             
 
